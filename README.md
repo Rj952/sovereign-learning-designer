@@ -86,7 +86,7 @@ Vercel will auto-deploy every push to `main`.
 
 ### 3. Custom domain (optional)
 
-In **Project Settings → Domains**, add the domain you control (e.g. `learning-designer.farquharsoninstitute.org`) and follow Vercel's DNS instructions.
+In **Project Settings → Domains**, add any domain you control and follow Vercel's DNS instructions.
 
 ---
 
