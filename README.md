@@ -116,14 +116,39 @@ The Anthropic API key never reaches the browser. All Claude calls go through `/a
 
 ---
 
-## Production hardening (recommended next steps)
+## Hardening (built-in, configurable via env vars)
 
-The app is safe to share with a closed pilot today. Before opening it to the public, add:
+Two production safeguards ship in the codebase. Both are off by default — turn them on by setting the relevant env vars in Vercel.
 
-1. **Rate limiting** on `/api/generate` — Vercel KV or Upstash Redis with a per-IP token bucket. Without it, anyone with the URL can run up your Anthropic bill.
-2. **Access gating** — a simple shared-password env var and middleware check is enough for institutional rollouts.
-3. **Persistence beyond localStorage** — Supabase or similar for drafts that survive across devices/browsers.
-4. **Usage analytics** — Vercel Analytics or Plausible. No PII.
+### 1. Per-IP rate limiting (always on)
+
+`/api/generate` enforces an in-memory token bucket. Defaults: **30 requests per IP per hour**. Configure via:
+
+| Env var | Default | What it does |
+|---|---|---|
+| `RATE_LIMIT_MAX` | `30` | Max requests per IP per window |
+| `RATE_LIMIT_WINDOW_MS` | `3600000` | Window length, in milliseconds |
+
+Cold starts and horizontal scaling reset counters per instance — for stricter, durable limits, swap the in-memory store for Vercel KV or Upstash Redis with `@upstash/ratelimit`.
+
+### 2. Optional shared-code access gate
+
+When `ACCESS_CODE` is set in your Vercel env vars, the entire app is locked behind `/unlock`. A correct code sets a 30-day HTTP-only cookie that lets the user back in.
+
+| Env var | Default | What it does |
+|---|---|---|
+| `ACCESS_CODE` | _unset_ | When set, requires this code at `/unlock` to access any non-public route |
+
+**To turn the gate on:** Vercel → Project Settings → Environment Variables → add `ACCESS_CODE` with a value of your choice → Redeploy.
+**To turn it off:** delete the env var and redeploy.
+
+---
+
+## Further hardening (recommended next steps)
+
+1. **Durable rate limiting** — replace the in-memory bucket with Vercel KV or Upstash Redis.
+2. **Persistence beyond localStorage** — Supabase or similar so drafts survive across devices/browsers.
+3. **Usage analytics** — Vercel Analytics or Plausible. No PII.
 
 ---
 
