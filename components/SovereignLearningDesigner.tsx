@@ -57,8 +57,9 @@ import {
   saveDraft,
   deleteDraft,
   newDraftId,
+  activeBackend,
   type DesignerDraft,
-} from "@/lib/storage";
+} from "@/lib/drafts";
 
 /* ============================================================
    Sovereign AI Learning Designer — Caribbean Edition
@@ -1368,9 +1369,18 @@ export default function SovereignLearningDesigner() {
 
   const mainRef = useRef<HTMLElement>(null);
 
-  // Load saved drafts on mount
+  // Load saved drafts on mount (async — works against Supabase if configured,
+  // localStorage otherwise)
   useEffect(() => {
-    setDrafts(loadAllDrafts());
+    let cancelled = false;
+    loadAllDrafts()
+      .then((d) => {
+        if (!cancelled) setDrafts(d);
+      })
+      .catch((e) => console.warn("[sld] could not load drafts:", e?.message));
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Move focus to main when step changes (a11y)
@@ -1492,26 +1502,31 @@ export default function SovereignLearningDesigner() {
     setErrors({ outcomes: "", brief: "", integrity: "", rubric: "", alignment: "" });
   };
 
-  const saveDraftHandler = useCallback(() => {
+  const saveDraftHandler = useCallback(async () => {
     const id = draftId || newDraftId();
     const name = brief?.title || context.courseTitle || `Draft ${new Date().toLocaleDateString()}`;
-    saveDraft({
-      id,
-      name,
-      savedAt: new Date().toISOString(),
-      context,
-      lens,
-      outcomes,
-      brief,
-      integrity,
-      rubric,
-      alignmentReport,
-      patoisMode,
-    });
-    setDraftId(id);
-    setDrafts(loadAllDrafts());
-    setDraftSaved(true);
-    setTimeout(() => setDraftSaved(false), 2400);
+    try {
+      const saved = await saveDraft({
+        id,
+        name,
+        savedAt: new Date().toISOString(),
+        context,
+        lens,
+        outcomes,
+        brief,
+        integrity,
+        rubric,
+        alignmentReport,
+        patoisMode,
+      });
+      setDraftId(saved.id);
+      const refreshed = await loadAllDrafts();
+      setDrafts(refreshed);
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2400);
+    } catch (e: any) {
+      console.warn("[sld] saveDraft failed:", e?.message);
+    }
   }, [draftId, brief, context, lens, outcomes, integrity, rubric, alignmentReport, patoisMode]);
 
   const resumeDraft = (d: DesignerDraft) => {
@@ -1528,9 +1543,14 @@ export default function SovereignLearningDesigner() {
     setStep(d.brief && d.rubric ? 6 : d.outcomes?.length ? 2 : 1);
   };
 
-  const handleDeleteDraft = (id: string) => {
-    deleteDraft(id);
-    setDrafts(loadAllDrafts());
+  const handleDeleteDraft = async (id: string) => {
+    try {
+      await deleteDraft(id);
+      const refreshed = await loadAllDrafts();
+      setDrafts(refreshed);
+    } catch (e: any) {
+      console.warn("[sld] deleteDraft failed:", e?.message);
+    }
   };
 
   const canAdvance = (() => {
